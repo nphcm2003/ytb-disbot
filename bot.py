@@ -9,7 +9,7 @@ intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-keep_alive()
+keep_alive()  # ⚡ Giữ bot luôn chạy bằng web server
 
 ydl_opts = {
     'format': 'bestaudio/best',
@@ -28,30 +28,17 @@ is_playing = False
 async def search_youtube(query):
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(query, download=False)
-        # Nếu là playlist
         if "entries" in info:
-            results = []
-            for entry in info['entries']:
-                results.append({
-                    'url': entry['url'],
-                    'title': entry.get('title', 'Không rõ')
-                })
-            return results
+            return [{'url': entry['url'], 'title': entry.get('title', 'Không rõ')} for entry in info['entries']]
         else:
-            # Nếu là 1 bài đơn
-            return [{
-                'url': info['url'],
-                'title': info.get('title', 'Không rõ')
-            }]
+            return [{'url': info['url'], 'title': info.get('title', 'Không rõ')}]
 
-async def play_next(current_ctx):
+async def play_next(ctx):
     global is_playing
-
     if music_queue.empty():
         is_playing = False
-        await current_ctx.send("✅ Hết bài trong hàng đợi.")
+        await ctx.send("✅ Hết bài trong hàng đợi.")
         return
-
     is_playing = True
     song = await music_queue.get()
     url = song['url']
@@ -69,7 +56,8 @@ async def play_next(current_ctx):
 
     vc.play(
         discord.FFmpegPCMAudio(url, executable="./ffmpeg/ffmpeg", **ffmpeg_opts),  # ⚠️ ffmpeg path Glitch
-        after=after_playing)
+        after=after_playing
+    )
     await ctx.send(f"▶️ Đang phát: **{title}** | Yêu cầu bởi: <@{requester}>")
 
 @bot.event
@@ -81,19 +69,10 @@ async def play(ctx, *, search: str):
     if not ctx.author.voice:
         await ctx.send("❌ Bạn cần vào kênh thoại trước.")
         return
-
     infos = await search_youtube(search)
-
     for info in infos:
-        await music_queue.put({
-            'url': info['url'],
-            'title': info['title'],
-            'requester': ctx.author.id,
-            'ctx': ctx
-        })
-
+        await music_queue.put({'url': info['url'], 'title': info['title'], 'requester': ctx.author.id, 'ctx': ctx})
     await ctx.send(f"✅ Đã thêm {len(infos)} bài vào hàng đợi.")
-
     global is_playing
     if not is_playing:
         await play_next(ctx)
@@ -145,4 +124,4 @@ async def stop(ctx):
         while not music_queue.empty():
             music_queue.get_nowait()
 
-bot.run(os.getenv("TOKEN"))  # ← Thay bằng token thật của bạn
+bot.run(os.getenv("TOKEN"))
